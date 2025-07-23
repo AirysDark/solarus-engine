@@ -36,10 +36,7 @@ jobs:
         cmake .. \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake \
-          -DCMAKE_VERBOSE_MAKEFILE=ON -Wdev -Werror=dev || true
-        if [ -f CMakeFiles/CMakeOutput.log ]; then
-          cat CMakeFiles/CMakeOutput.log
-        fi
+          -DCMAKE_VERBOSE_MAKEFILE=ON -Wdev -Werror=dev 2>&1 | tee ../cmake.log || true
 
     - name: Compile
       run: |
@@ -48,10 +45,18 @@ jobs:
 
     - name: Upload Logs
       if: always()
+      run: |
+        mkdir -p logs
+        if [ -f cmake.log ]; then cp cmake.log logs/; fi
+        if [ -f build/CMakeFiles/CMakeOutput.log ]; then cp build/CMakeFiles/CMakeOutput.log logs/; fi
+      continue-on-error: true
+
+    - name: Upload Logs Artifact
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: cmake-logs
-        path: build/CMakeFiles/CMakeOutput.log
+        path: logs/
 
     - name: Package as .deb
       run: |
