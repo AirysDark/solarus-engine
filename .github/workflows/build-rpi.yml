@@ -1,0 +1,71 @@
+name: Build and Package Solarus Engine (Ubuntu CI)
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Init submodules
+      run: git submodule update --init --recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake g++ \
+          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libopenal-dev libmodplug-dev libvorbis-dev libphysfs-dev \
+          libglew-dev libglm-dev libtinyxml2-dev \
+          checkinstall fakeroot
+
+    - name: Configure project
+      run: |
+        mkdir build
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake \
+          -DCMAKE_VERBOSE_MAKEFILE=ON -Wdev -Werror=dev || true
+        if [ -f CMakeFiles/CMakeOutput.log ]; then
+          cat CMakeFiles/CMakeOutput.log
+        fi
+
+    - name: Compile
+      run: |
+        cd build
+        make -j$(nproc) || true
+
+    - name: Upload Logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: cmake-logs
+        path: build/CMakeFiles/CMakeOutput.log
+
+    - name: Package as .deb
+      run: |
+        cd build
+        sudo checkinstall -y --install=no --pkgname=solarus-engine --pkgversion=1.0 --pkgrelease=1 --pkglicense=MIT --pkgsource=github.com --pkggroup=games
+
+    - name: Upload .deb Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: solarus-engine-deb
+        path: build/*.deb
+
+    - name: Upload Release Asset
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*.deb
