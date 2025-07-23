@@ -1,0 +1,159 @@
+name: Build & Package Solarus Engine (Ubuntu + RPi Cross)
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  release:
+    types: [created]
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Init submodules
+      run: git submodule update --init --recursive
+
+    - name: Install build deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential cmake pkg-config \
+          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libopenal-dev libvorbis-dev libogg-dev libmodplug-dev libphysfs-dev \
+          libluajit-5.1-dev liblua5.1-0-dev
+
+    - name: Configure (native)
+      run: |
+        mkdir build
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DSOLARUS_USE_LUAJIT=ON \
+          -DCMAKE_VERBOSE_MAKEFILE=ON 2>&1 | tee ../cmake.log
+
+    - name: Build
+      run: |
+        cd build
+        make -j$(nproc)
+
+    - name: Install to staging
+      run: |
+        cd build
+        make DESTDIR=$(pwd)/pkg install
+        find pkg -maxdepth 5 -type f -print
+
+    - name: Build .deb (dpkg-deb)
+      run: |
+        cd build
+        mkdir -p pkg/DEBIAN
+        cat > pkg/DEBIAN/control <<'EOF'
+Package: solarus-engine
+Version: 1.0
+Section: games
+Priority: optional
+Architecture: amd64
+Maintainer: Airys Dark <noreply@example>
+Description: Solarus game engine built via GitHub Actions
+EOF
+        dpkg-deb --build pkg solarus-engine-amd64.deb
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: solarus-linux-amd64
+        path: |
+          build/solarus-engine-amd64.deb
+          cmake.log
+          build/CMakeFiles/CMakeOutput.log
+
+  # Cross-compile job: ARMHF (Raspberry Pi OS 32-bit)
+  build-armhf:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Init submodules
+      run: git submodule update --init --recursive
+
+    - name: Install cross deps
+      run: |
+        sudo dpkg --add-architecture armhf
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake ninja-build pkg-config \
+          g++-arm-linux-gnueabihf \
+          libsdl2-dev:armhf libsdl2-image-dev:armhf libsdl2-mixer-dev:armhf libsdl2-ttf-dev:armhf \
+          libopenal-dev:armhf libvorbis-dev:armhf libogg-dev:armhf libmodplug-dev:armhf libphysfs-dev:armhf \
+          libluajit-5.1-dev:armhf liblua5.1-0-dev:armhf
+
+    - name: Configure (armhf)
+      run: |
+        mkdir build-armhf
+        cd build-armhf
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DSOLARUS_USE_LUAJIT=ON \
+          -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-armhf.cmake \
+          -G Ninja 2>&1 | tee ../cmake-armhf.log
+
+    - name: Build (armhf)
+      run: |
+        cd build-armhf
+        ninja
+
+    - name: Install to staging (armhf)
+      run: |
+        cd build-armhf
+        DESTDIR=$(pwd)/pkg ninja install
+
+    - name: Build .deb (armhf)
+      run: |
+        cd build-armhf
+        mkdir -p pkg/DEBIAN
+        cat > pkg/DEBIAN/control <<'EOF'
+Package: solarus-engine
+Version: 1.0
+Section: games
+Priority: optional
+Architecture: armhf
+Maintainer: Airys Dark <noreply@example>
+Description: Solarus game engine cross-built for Raspberry Pi (armhf)
+EOF
+        dpkg-deb --build pkg solarus-engine-armhf.deb
+
+    - name: Upload armhf artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: solarus-armhf
+        path: |
+          build-armhf/solarus-engine-armhf.deb
+          cmake-armhf.log
+          build-armhf/CMakeFiles/CMakeOutput.log
+
+  # Release job runs after both builds succeed
+  release:
+    needs: [build-linux-x64, build-armhf]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: solarus-*
+        path: artifacts
+
+    - name: List artifacts
+      run: ls -R artifacts
+
+    - name: Upload to GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/solarus-linux-amd64/solarus-engine-amd64.deb
+          artifacts/solarus-armhf/solarus-engine-armhf.deb

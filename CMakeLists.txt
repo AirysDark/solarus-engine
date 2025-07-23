@@ -1,8 +1,15 @@
+cmake_minimum_required(VERSION 2.8.11)
+project(solarus-engine)
 
-cmake_minimum_required(VERSION 3.10)
-project(solarus)
+include(cmake/AddSolarusVersion.cmake)
+include(cmake/AddDefines.cmake)
+include(cmake/AddCompilationFlags.cmake)
+include(cmake/AddDependencies.cmake)
+include(cmake/AddIncludeDirectories.cmake)
+include(cmake/AddConfigurationHeader.cmake)
+include(cmake/AddSolarusLibrary.cmake)
+include(cmake/AddSolarusExecutable.cmake)
+include(cmake/AddInstallTargets.cmake)
+include(cmake/AddUnitTests.cmake)
+include(cmake/AddGui.cmake)
 
-add_executable(solarus main.cpp)
-
-# --- install workaround for checkinstall ---
-install(TARGETS solarus DESTINATION bin)
