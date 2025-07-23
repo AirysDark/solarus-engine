@@ -48,7 +48,7 @@ jobs:
 
     - name: Upload Logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cmake-logs
         path: build/CMakeFiles/CMakeOutput.log
@@ -59,7 +59,7 @@ jobs:
         sudo checkinstall -y --install=no --pkgname=solarus-engine --pkgversion=1.0 --pkgrelease=1 --pkglicense=MIT --pkgsource=github.com --pkggroup=games
 
     - name: Upload .deb Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: solarus-engine-deb
         path: build/*.deb
